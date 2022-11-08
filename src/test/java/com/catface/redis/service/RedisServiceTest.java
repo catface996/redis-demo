@@ -27,8 +27,8 @@ public class RedisServiceTest {
 
   @Test
   public void clear() {
-    for (long i = 0; i < 20; i++) {
-      for (long segId = 0; segId < 100; segId++) {
+    for (long i = 0; i < 1; i++) {
+      for (long segId = 0; segId < 1000; segId++) {
         String segKey = buildSegKey("group-" + i, segId);
         String batchKey = stringRedisTemplate.opsForValue().get(segKey);
         if (batchKey != null) {

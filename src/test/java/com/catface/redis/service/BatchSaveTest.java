@@ -23,6 +23,9 @@ public class BatchSaveTest {
   @Autowired
   private QueryGroupMemberService queryGroupMemberService;
 
+  @Autowired
+  private BatchSaveToRedisBItService batchSaveToRedisBItService;
+
   @Test
   public void test() throws Exception {
     String group = "group-1";
@@ -39,6 +42,14 @@ public class BatchSaveTest {
     TimeUnit.MINUTES.sleep(10);
   }
 
+  @Test
+  public void test_bit() throws Exception {
+    String group = "group-1";
+    String memberIndexArrStr = buildMemberIndexStr(1000000);
+    batchSaveToRedisBItService.saveToRedis(group, memberIndexArrStr);
+    TimeUnit.MINUTES.sleep(10);
+  }
+
   private String buildMemberIndexStr(int size) {
     List<String> data = new ArrayList<>();
     data.add("[" + 0);
@@ -48,5 +59,6 @@ public class BatchSaveTest {
     data.add((size - 1) + "]");
     return String.join(",", data);
   }
+
 
 }
