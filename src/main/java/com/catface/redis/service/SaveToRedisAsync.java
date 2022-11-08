@@ -28,28 +28,31 @@ public class SaveToRedisAsync {
   @Async("threadPool")
   public Future<Long> saveToRedisAsync(String group, Long segmentId,
       LinkedList<String> memberIndexArr) {
+    Long saveNum = 0L;
+    try {
+      // 构建segment的key
+      String segKey = buildSegKey(group, segmentId);
+      // 获取segment已经存在的有效批次的key
+      String oldSegBatchKey = stringRedisTemplate.opsForValue().get(segKey);
+      // 构建segment对应的有效批次的key
+      String newSegBatchKey = buildSegBatchKey(group, segmentId);
 
-    // 构建segment的key
-    String segKey = buildSegKey(group, segmentId);
-    // 获取segment已经存在的有效批次的key
-    String oldSegBatchKey = stringRedisTemplate.opsForValue().get(segKey);
-    // 构建segment对应的有效批次的key
-    String newSegBatchKey = buildSegBatchKey(group, segmentId);
-
-    // 将segment保存到redis
-    String[] vArr = memberIndexArr.toArray(new String[0]);
-    long tStart = System.currentTimeMillis();
-    Long saveNum = stringRedisTemplate.opsForSet().add(newSegBatchKey, vArr);
-    long tEnd = System.currentTimeMillis();
-    log.info("save segment time:{}", tEnd - tStart);
-
-    // 设置segment的过期时间为1天
-    stringRedisTemplate.expire(newSegBatchKey, 1L, TimeUnit.DAYS);
-    // 将新的有效批次,设置到segment的key对应的value中
-    stringRedisTemplate.opsForValue().set(segKey, newSegBatchKey,1L,TimeUnit.DAYS);
-    // 老版本的segment的批次存在的话,进行删除
-    if (oldSegBatchKey != null) {
-      stringRedisTemplate.delete(oldSegBatchKey);
+      // 将segment保存到redis
+      String[] vArr = memberIndexArr.toArray(new String[0]);
+      long tStart = System.currentTimeMillis();
+      saveNum = stringRedisTemplate.opsForSet().add(newSegBatchKey, vArr);
+      long tEnd = System.currentTimeMillis();
+      log.info("save segment time:{}", tEnd - tStart);
+      // 设置segment的过期时间为1天
+      stringRedisTemplate.expire(newSegBatchKey, 1L, TimeUnit.DAYS);
+      // 将新的有效批次,设置到segment的key对应的value中
+      stringRedisTemplate.opsForValue().set(segKey, newSegBatchKey, 1L, TimeUnit.DAYS);
+      // 老版本的segment的批次存在的话,进行删除
+      if (oldSegBatchKey != null) {
+        stringRedisTemplate.delete(oldSegBatchKey);
+      }
+    } catch (Exception e) {
+      log.error("异步保存memberIndex到redis异常", e);
     }
     if (saveNum == null) {
       saveNum = 0L;
