@@ -70,8 +70,4 @@ public class SaveToRedisAsync {
     return buildSegKey(group, segId) + ":" + batchId;
   }
 
-  private long calculateSegId(String memberIndex) {
-    return Long.parseLong(memberIndex) % segmentNum;
-  }
-
 }

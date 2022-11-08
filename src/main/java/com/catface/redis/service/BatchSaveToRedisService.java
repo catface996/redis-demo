@@ -43,6 +43,8 @@ public class BatchSaveToRedisService {
     // 分组为map
     List<Future<Long>> futureList = new ArrayList<>();
     Map<Long, LinkedList<String>> segmentMap = splitSegment(memberIndexArr, segmentNums);
+
+    // 逐个segment异步保存到redis
     segmentMap.forEach((segmentId, segmentArr) -> {
       Future<Long> future = saveToRedisAsync.saveToRedisAsync(group, segmentId, segmentArr);
       futureList.add(future);

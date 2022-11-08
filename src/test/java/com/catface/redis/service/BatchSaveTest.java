@@ -2,6 +2,7 @@ package com.catface.redis.service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
@@ -19,10 +20,22 @@ public class BatchSaveTest {
   @Autowired
   private BatchSaveToRedisService batchSaveToRedisService;
 
+  @Autowired
+  private QueryGroupMemberService queryGroupMemberService;
+
   @Test
   public void test() throws Exception {
+    String group = "group-1";
     String memberIndexArrStr = buildMemberIndexStr(15000000);
-    batchSaveToRedisService.saveToRedis("group-1", memberIndexArrStr);
+    batchSaveToRedisService.saveToRedis(group, memberIndexArrStr);
+    Random random = new Random(10);
+    for (int i = 0; i < 100; i++) {
+      long queryStart = System.currentTimeMillis();
+      String memberIndex = random.nextInt(80000000) + "";
+      boolean exist = queryGroupMemberService.inGroup(group, memberIndex);
+      long queryEnd = System.currentTimeMillis();
+      log.info("memberIndex:{} exist:{},duration:{}", memberIndex, exist, queryEnd - queryStart);
+    }
     TimeUnit.MINUTES.sleep(10);
   }
 
