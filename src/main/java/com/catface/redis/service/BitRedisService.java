@@ -34,7 +34,7 @@ public class BitRedisService {
     String[] memberIndexArr = splitToMemberIndexArr(memberIndexArrStr);
     Map<Long, Segment> segBitMap = convertSegBitMap(memberIndexArr);
     segBitMap.forEach((segmentId, segment) -> {
-      saveToRedisAsync.saveToRedisAsyncBit(group, segmentId, segment.getValue());
+      saveToRedisAsync.saveToRedisRoaring64BitmapAsync(group, segmentId, segment.getValue());
     });
   }
 

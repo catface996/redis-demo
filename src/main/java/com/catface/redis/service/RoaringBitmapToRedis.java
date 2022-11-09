@@ -52,7 +52,7 @@ public class RoaringBitmapToRedis {
     // 逐个分段异步保存到redis,并同步阻塞
     List<Future<Long>> futures = new ArrayList<>();
     segmentMap.forEach((segmentId, bitmap) -> {
-      Future<Long> future = saveToRedisAsync.saveToRedisAsyncBit(group, segmentId, bitmap);
+      Future<Long> future = saveToRedisAsync.saveToRedisRoaring64BitmapAsync(group, segmentId, bitmap);
       futures.add(future);
       // 此处是为了尽快释放内存
       segmentMap.put(segmentId, null);
