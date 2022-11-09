@@ -1,14 +1,22 @@
 package com.catface.redis.service;
 
+import io.lettuce.core.RedisClient;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
 import java.util.LinkedList;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import lombok.extern.slf4j.Slf4j;
+import org.roaringbitmap.longlong.Roaring64Bitmap;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.AsyncResult;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 /**
  * @author catface
@@ -20,6 +28,9 @@ public class SaveToRedisAsync {
 
   @Autowired
   private StringRedisTemplate stringRedisTemplate;
+
+  @Autowired
+  private RedisTemplate<String,byte[]> byteRedisTemplate;
 
 
   @Async("threadPool")
@@ -75,6 +86,34 @@ public class SaveToRedisAsync {
       stringRedisTemplate.expire(newSegBatchKey, 1L, TimeUnit.DAYS);
       // 将新的有效批次,设置到segment的key对应的value中
       stringRedisTemplate.opsForValue().set(segKey, newSegBatchKey, 1L, TimeUnit.DAYS);
+      // 老版本的segment的批次存在的话,进行删除
+      if (oldSegBatchKey != null) {
+        stringRedisTemplate.delete(oldSegBatchKey);
+      }
+    } catch (Exception e) {
+      log.error("异步保存memberIndex到redis异常", e);
+    }
+    return new AsyncResult<>(null);
+  }
+
+  @Async("threadPool")
+  public Future<Void> saveToRedisAsyncBit(String group, Long segmentId, Roaring64Bitmap bitmap) {
+    try {
+      // 构建segment的key
+      String segKey = buildSegKey(group, segmentId);
+      // 获取segment已经存在的有效批次的key
+      String oldSegBatchKey = stringRedisTemplate.opsForValue().get(segKey);
+      // 构建segment对应的有效批次的key
+      String newSegBatchKey = buildSegBatchKey(group, segmentId);
+      ByteArrayOutputStream bos = new ByteArrayOutputStream();
+      bitmap.serialize(new DataOutputStream(bos));
+      byte[] data = bos.toByteArray();
+      // 将segment保存到redis
+      byteRedisTemplate.opsForValue().set(newSegBatchKey, data, 1L, TimeUnit.HOURS);
+      // 设置segment的过期时间为1天
+      stringRedisTemplate.expire(newSegBatchKey, 1L, TimeUnit.HOURS);
+      // 将新的有效批次,设置到segment的key对应的value中
+      stringRedisTemplate.opsForValue().set(segKey, newSegBatchKey, 1L, TimeUnit.HOURS);
       // 老版本的segment的批次存在的话,进行删除
       if (oldSegBatchKey != null) {
         stringRedisTemplate.delete(oldSegBatchKey);

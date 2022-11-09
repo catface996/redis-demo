@@ -24,7 +24,7 @@ public class BatchSaveTest {
   private QueryGroupMemberService queryGroupMemberService;
 
   @Autowired
-  private BatchSaveToRedisBItService batchSaveToRedisBItService;
+  private BitRedisService bitRedisService;
 
   @Test
   public void test() throws Exception {
@@ -46,7 +46,7 @@ public class BatchSaveTest {
   public void test_bit() throws Exception {
     String group = "group-1";
     String memberIndexArrStr = buildMemberIndexStr(1000000);
-    batchSaveToRedisBItService.saveToRedis(group, memberIndexArrStr);
+    bitRedisService.saveToRedis(group, memberIndexArrStr);
     TimeUnit.MINUTES.sleep(10);
   }
 
