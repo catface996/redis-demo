@@ -1,9 +1,6 @@
 package com.catface.redis.service;
 
-import io.lettuce.core.RedisClient;
-import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.util.LinkedList;
 import java.util.concurrent.Future;
@@ -16,7 +13,6 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.AsyncResult;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 
 /**
  * @author catface
@@ -30,7 +26,7 @@ public class SaveToRedisAsync {
   private StringRedisTemplate stringRedisTemplate;
 
   @Autowired
-  private RedisTemplate<String,byte[]> byteRedisTemplate;
+  private RedisTemplate<String, byte[]> byteRedisTemplate;
 
 
   @Async("threadPool")
@@ -97,7 +93,7 @@ public class SaveToRedisAsync {
   }
 
   @Async("threadPool")
-  public Future<Void> saveToRedisAsyncBit(String group, Long segmentId, Roaring64Bitmap bitmap) {
+  public Future<Long> saveToRedisAsyncBit(String group, Long segmentId, Roaring64Bitmap bitmap) {
     try {
       // 构建segment的key
       String segKey = buildSegKey(group, segmentId);
@@ -121,7 +117,7 @@ public class SaveToRedisAsync {
     } catch (Exception e) {
       log.error("异步保存memberIndex到redis异常", e);
     }
-    return new AsyncResult<>(null);
+    return new AsyncResult<>(segmentId);
   }
 
 
