@@ -1,5 +1,6 @@
 package com.catface.redis.service;
 
+import com.catface.redis.service.convert.SegmentBuilder;
 import com.catface.redis.service.model.GroupRoaring64BitmapSerialize;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -28,11 +29,7 @@ public class SaveToRedisAsync {
   private StringRedisTemplate stringRedisTemplate;
 
   @Autowired
-  private RedisTemplate<String, byte[]> byteRedisTemplate;
-
-  @Autowired
   private RedisTemplate<String, Object> objectRedisTemplate;
-
 
   @Async("threadPool")
   public Future<Long> saveToRedisAsync(String group, Long segmentId,
@@ -40,11 +37,11 @@ public class SaveToRedisAsync {
     Long saveNum = 0L;
     try {
       // 构建segment的key
-      String segKey = buildSegKey(group, segmentId);
+      String segKey = SegmentBuilder.buildSegKey(group, segmentId);
       // 获取segment已经存在的有效批次的key
       String oldSegBatchKey = stringRedisTemplate.opsForValue().get(segKey);
       // 构建segment对应的有效批次的key
-      String newSegBatchKey = buildSegBatchKey(group, segmentId);
+      String newSegBatchKey = SegmentBuilder.buildSegBatchKey(group, segmentId);
 
       // 将segment保存到redis
       String[] vArr = memberIndexArr.toArray(new String[0]);
@@ -73,11 +70,11 @@ public class SaveToRedisAsync {
   public Future<Void> saveToRedisRoaring64BitmapAsync(String group, Long segmentId, byte[] bitArr) {
     try {
       // 构建segment的key
-      String segKey = buildSegKey(group, segmentId);
+      String segKey = SegmentBuilder.buildSegKey(group, segmentId);
       // 获取segment已经存在的有效批次的key
       String oldSegBatchKey = stringRedisTemplate.opsForValue().get(segKey);
       // 构建segment对应的有效批次的key
-      String newSegBatchKey = buildSegBatchKey(group, segmentId);
+      String newSegBatchKey = SegmentBuilder.buildSegBatchKey(group, segmentId);
       // 将segment保存到redis
       stringRedisTemplate.opsForValue().set(newSegBatchKey, new String(bitArr, 0, bitArr.length));
       // 设置segment的过期时间为1天
@@ -99,9 +96,9 @@ public class SaveToRedisAsync {
       Roaring64Bitmap bitmap) {
     try {
       // 构建segment的key
-      String segKey = buildSegKey(group, segmentId);
+      String segKey = SegmentBuilder.buildSegKey(group, segmentId);
       // 构建segment对应的有效批次的key
-      String newSegBatchKey = buildSegBatchKey(group, segmentId);
+      String newSegBatchKey = SegmentBuilder.buildSegBatchKey(group, segmentId);
 
       // 将Roaring64Bitmap转换成byte[],以便保存到redis
       GroupRoaring64BitmapSerialize serialize = convertToBytes(segKey, bitmap);
@@ -136,14 +133,5 @@ public class SaveToRedisAsync {
     return new GroupRoaring64BitmapSerialize(segKey, data);
   }
 
-
-  private String buildSegKey(String group, Long segId) {
-    return group + ":" + segId;
-  }
-
-  private String buildSegBatchKey(String group, Long segId) {
-    long batchId = System.currentTimeMillis();
-    return buildSegKey(group, segId) + ":" + batchId;
-  }
 
 }

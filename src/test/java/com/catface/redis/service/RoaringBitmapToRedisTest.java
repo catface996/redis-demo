@@ -77,7 +77,7 @@ public class RoaringBitmapToRedisTest {
     int baseNum = 10000 * 10000;
     Random random = new Random();
     long total = 0;
-    int memberIndexMax = 10000 * 10;
+    int memberIndexMax = 10000;
     for (int memberIndex = 1; memberIndex < memberIndexMax; memberIndex++) {
       String memberId = (memberIndex + baseNum) + "";
       String group = "group-" + random.nextInt(100);

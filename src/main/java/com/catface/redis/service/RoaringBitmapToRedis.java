@@ -1,6 +1,7 @@
 package com.catface.redis.service;
 
 import com.catface.redis.service.convert.Roaring64BitmapConvert;
+import com.catface.redis.service.convert.SegmentBuilder;
 import com.catface.redis.service.model.GroupRoaring64BitmapSerialize;
 import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
@@ -36,10 +37,6 @@ public class RoaringBitmapToRedis {
 
   @Autowired
   private StringRedisTemplate stringRedisTemplate;
-
-  @Autowired
-  private RedisTemplate<String, byte[]> byteRedisTemplate;
-
 
   @Autowired
   private RedisTemplate<String, Object> objectRedisTemplate;
@@ -78,22 +75,34 @@ public class RoaringBitmapToRedis {
    * @return true:在组中,false:不在组中;null:不确定
    */
   public Boolean inGroup(String group, String memberIndexStr) {
+
+    // 计算segmentId并生成group的segmentKey
     long memberIndex = Long.parseLong(memberIndexStr);
     long segmentId = memberIndex % segmentNum;
-    String segmentKey = buildSegKey(group, segmentId);
+    String segmentKey = SegmentBuilder.buildSegKey(group, segmentId);
+
     String segmentBatchKey = stringRedisTemplate.opsForValue().get(segmentKey);
-    if (segmentBatchKey != null) {
-      GroupRoaring64BitmapSerialize serialize = (GroupRoaring64BitmapSerialize) objectRedisTemplate.opsForValue()
-          .get(segmentBatchKey);
+    if (segmentBatchKey == null) {
+      log.warn("group分段的batchKey不存在于Redis中,即group段未缓存到Redis,segmentKey:{}",
+          segmentKey);
+      return null;
+    }
+
+    GroupRoaring64BitmapSerialize serialize = (GroupRoaring64BitmapSerialize) objectRedisTemplate.opsForValue()
+        .get(segmentBatchKey);
+    if (serialize == null) {
+      log.warn("从Redis中取出的group段的Roaring64Bitmap为空,segmentKey:{}", segmentKey);
+      return null;
+    }
+
+    // 从Roaring64Bitmap中检查会员是否存在于对应的group中
+    try {
       Roaring64Bitmap rBitmap = new Roaring64Bitmap();
-      try {
-        rBitmap.deserialize(
-            new DataInputStream(new ByteArrayInputStream(serialize.getBitmapBytes())));
-      } catch (Exception e) {
-        log.error("segmentBatchKey:{},对应的字节码无法反序列化成bitmap", segmentBatchKey, e);
-        return null;
-      }
+      ByteArrayInputStream bis = new ByteArrayInputStream(serialize.getBitmapBytes());
+      rBitmap.deserialize(new DataInputStream(bis));
       return rBitmap.contains(memberIndex);
+    } catch (Exception e) {
+      log.error("segmentBatchKey:{},对应的字节码无法反序列化成bitmap", segmentBatchKey, e);
     }
     return null;
   }
@@ -113,7 +122,7 @@ public class RoaringBitmapToRedis {
     // 批量构建会员所在的段的key
     long memberIndex = Long.parseLong(memberIndexStr);
     Long segmentId = memberIndex % segmentNum;
-    Set<String> segmentKeys = buildSegKeys(groups, segmentId);
+    Set<String> segmentKeys = SegmentBuilder.buildSegKeys(groups, segmentId);
 
     // 一次获取多个段的有效批次的key
     List<String> batchKeys = stringRedisTemplate.opsForValue().multiGet(segmentKeys);
@@ -131,9 +140,10 @@ public class RoaringBitmapToRedis {
       return result;
     }
 
-    // 检查会员是否出现在对应的
+    // 检查会员是否出现在对应的group中,如果命中了Redis的缓存,结果要么是true,要么是false
+    // 默认为null的说明group的分段未加载到Redis中缓存,需要到ClickHouse中查询
     for (String group : result.keySet()) {
-      String segmentKey = buildSegKey(group, segmentId);
+      String segmentKey = SegmentBuilder.buildSegKey(group, segmentId);
       Roaring64Bitmap bitmap = segmentMap.get(segmentKey);
       if (bitmap != null) {
         result.put(group, bitmap.contains(memberIndex));
@@ -179,32 +189,6 @@ public class RoaringBitmapToRedis {
     return result;
   }
 
-
-  /**
-   * 构建group分段的key
-   *
-   * @param group     组名
-   * @param segmentId 分段ID,是会员下标对分段数取余获得
-   * @return group分段
-   */
-  private String buildSegKey(String group, Long segmentId) {
-    return group + ":" + segmentId;
-  }
-
-  /**
-   * 构建group分段的key
-   *
-   * @param groups    组名集合
-   * @param segmentId 分段ID,是会员下标对分段数取余获得
-   * @return group分段
-   */
-  private Set<String> buildSegKeys(Set<String> groups, Long segmentId) {
-    Set<String> segmentKeys = new HashSet<>();
-    for (String group : groups) {
-      segmentKeys.add(buildSegKey(group, segmentId));
-    }
-    return segmentKeys;
-  }
 
   /**
    * 检查保存失败的segment并记录日志
