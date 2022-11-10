@@ -1,5 +1,6 @@
 package com.catface.redis.service;
 
+import com.catface.redis.service.model.GroupRoaring64BitmapSerialize;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -28,6 +29,9 @@ public class SaveToRedisAsync {
 
   @Autowired
   private RedisTemplate<String, byte[]> byteRedisTemplate;
+
+  @Autowired
+  private RedisTemplate<String, Object> objectRedisTemplate;
 
 
   @Async("threadPool")
@@ -91,7 +95,8 @@ public class SaveToRedisAsync {
   }
 
   @Async("threadPool")
-  public Future<Long> saveToRedisRoaring64BitmapAsync(String group, Long segmentId, Roaring64Bitmap bitmap) {
+  public Future<Long> saveToRedisRoaring64BitmapAsync(String group, Long segmentId,
+      Roaring64Bitmap bitmap) {
     try {
       // 构建segment的key
       String segKey = buildSegKey(group, segmentId);
@@ -99,9 +104,10 @@ public class SaveToRedisAsync {
       String newSegBatchKey = buildSegBatchKey(group, segmentId);
 
       // 将Roaring64Bitmap转换成byte[],以便保存到redis
-      byte[] bitmapBytes = convertToBytes(bitmap);
+      GroupRoaring64BitmapSerialize serialize = convertToBytes(segKey, bitmap);
+
       // 将segment保存到redis,设置segment的过期时间为1天,大于定时任务的周期即可
-      byteRedisTemplate.opsForValue().set(newSegBatchKey, bitmapBytes, 1L, TimeUnit.HOURS);
+      objectRedisTemplate.opsForValue().set(newSegBatchKey, serialize, 1L, TimeUnit.HOURS);
 
       // 获取segment已经存在的有效批次的key,避免batch滚动时被覆盖,无法获得
       String oldSegBatchKey = stringRedisTemplate.opsForValue().get(segKey);
@@ -122,11 +128,12 @@ public class SaveToRedisAsync {
     return new AsyncResult<>(segmentId);
   }
 
-  private static byte[] convertToBytes(Roaring64Bitmap bitmap) throws IOException {
+  private static GroupRoaring64BitmapSerialize convertToBytes(String segKey, Roaring64Bitmap bitmap)
+      throws IOException {
     ByteArrayOutputStream bos = new ByteArrayOutputStream();
     bitmap.serialize(new DataOutputStream(bos));
     byte[] data = bos.toByteArray();
-    return data;
+    return new GroupRoaring64BitmapSerialize(segKey, data);
   }
 
 

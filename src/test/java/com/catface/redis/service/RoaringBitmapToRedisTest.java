@@ -1,8 +1,11 @@
 package com.catface.redis.service;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Random;
+import java.util.Set;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -56,7 +59,7 @@ public class RoaringBitmapToRedisTest {
 
 
   @Test
-  public void test() {
+  public void testSaveToRedis() {
     String memberIndexArrStr = buildMemberIndexStr(1500 * 10000);
     long total = 0L;
     for (int i = 0; i < 100; i++) {
@@ -74,7 +77,8 @@ public class RoaringBitmapToRedisTest {
     int baseNum = 10000 * 10000;
     Random random = new Random();
     long total = 0;
-    for (int memberIndex = 1; memberIndex < 10 * 10000; memberIndex++) {
+    int memberIndexMax = 10000 * 10;
+    for (int memberIndex = 1; memberIndex < memberIndexMax; memberIndex++) {
       String memberId = (memberIndex + baseNum) + "";
       String group = "group-" + random.nextInt(100);
       long start = System.currentTimeMillis();
@@ -84,7 +88,33 @@ public class RoaringBitmapToRedisTest {
       total += duration;
       Assert.state(in, "不存在是不对的");
     }
-    log.info("avg duration: {} 毫秒", total / (10 * 10000));
+    log.info("avg duration: {} 毫秒", total / memberIndexMax);
+
+  }
+
+  @Test
+  public void testTestInGroupBatch() {
+    int baseNum = 10000 * 10000;
+    Random random = new Random();
+    long total = 0;
+    int memberIndexMax = 1000;
+    for (int memberIndex = 1; memberIndex < memberIndexMax; memberIndex++) {
+      String memberId = (memberIndex + baseNum) + "";
+      Set<String> groups = new HashSet<>();
+      int groupNum = random.nextInt(5) + 5;
+      for (int i = 0; i < groupNum; i++) {
+        groups.add("group-" + random.nextInt(100));
+      }
+      long start = System.currentTimeMillis();
+      Map<String, Boolean> in = roaringBitmapToRedis.inGroups(groups, memberId);
+      long end = System.currentTimeMillis();
+      long duration = end - start;
+      total += duration;
+      for (Boolean value : in.values()) {
+        Assert.state(value, "不存在是不对的");
+      }
+    }
+    log.info("avg duration: {} 毫秒", total / memberIndexMax);
 
   }
 
