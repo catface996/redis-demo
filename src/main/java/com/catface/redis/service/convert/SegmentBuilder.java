@@ -16,7 +16,7 @@ public class SegmentBuilder {
    * @param segId 分段ID
    * @return segmentKey, 在Redis中使用
    */
-  public static String buildSegKey(String group, Long segId) {
+  public static String buildSegmentKey(String group, Long segId) {
     return "dc:" + group + ":" + segId;
   }
 
@@ -27,9 +27,9 @@ public class SegmentBuilder {
    * @param segId 分段ID
    * @return segmentBatchKey, 在Redis中使用
    */
-  public static String buildSegBatchKey(String group, Long segId) {
+  public static String buildSegmentBatchKey(String group, Long segId) {
     long batchId = System.currentTimeMillis();
-    return buildSegKey(group, segId) + ":" + batchId;
+    return buildSegmentKey(group, segId) + ":" + batchId;
   }
 
   /**
@@ -39,10 +39,10 @@ public class SegmentBuilder {
    * @param segmentId 分段ID,是会员下标对分段数取余获得
    * @return group分段
    */
-  public static Set<String> buildSegKeys(Set<String> groups, Long segmentId) {
+  public static Set<String> buildSegmentKeys(Set<String> groups, Long segmentId) {
     Set<String> segmentKeys = new HashSet<>();
     for (String group : groups) {
-      segmentKeys.add(buildSegKey(group, segmentId));
+      segmentKeys.add(buildSegmentKey(group, segmentId));
     }
     return segmentKeys;
   }

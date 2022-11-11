@@ -1,5 +1,7 @@
-package com.catface.redis.service;
+package com.catface.redis.service.impl;
 
+import com.catface.redis.service.GroupMemberCacheService;
+import com.catface.redis.service.SaveToRedisAsync;
 import com.catface.redis.service.convert.Roaring64BitmapConvert;
 import com.catface.redis.service.convert.SegmentBuilder;
 import com.catface.redis.service.model.GroupRoaring64BitmapSerialize;
@@ -18,6 +20,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.AsyncResult;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 
@@ -27,7 +31,7 @@ import org.springframework.util.CollectionUtils;
  */
 @Slf4j
 @Service
-public class RoaringBitmapToRedis {
+public class GroupMemberRoaring64BitmapImpl implements GroupMemberCacheService {
 
   @Value("${member.segmentNum}")
   private Integer segmentNum;
@@ -42,13 +46,13 @@ public class RoaringBitmapToRedis {
   private RedisTemplate<String, Object> objectRedisTemplate;
 
   /**
-   * 保存会员下标到redis
+   * 保存group对应的会员的索引信息到缓存中
    *
-   * @param group             组别
-   * @param memberIndexArrStr 会员下标
+   * @param group             组
+   * @param memberIndexArrStr 会员索引的字符串,格式为: [123,456,789]
    */
-  public void saveToRedis(String group, String memberIndexArrStr) {
-
+  @Override
+  public void saveToCache(String group, String memberIndexArrStr) {
     // 字符串解析,并分段到bitmap
     Map<Long, Roaring64Bitmap> segmentMap = Roaring64BitmapConvert.convertFromMemberIndexArrStr(
         memberIndexArrStr, segmentNum);
@@ -68,18 +72,36 @@ public class RoaringBitmapToRedis {
   }
 
   /**
-   * 是否在组中
+   * 异步保存group对应的会员索引信息到缓存中
    *
-   * @param group          待检查的组
-   * @param memberIndexStr 会员下标字符串
-   * @return true:在组中,false:不在组中;null:不确定
+   * @param group             组
+   * @param memberIndexArrStr 会员索引的字符串,格式为: [123,456,789]
+   * @return 用于异步转同步的阻塞
    */
+  @Async("threadPool")
+  @Override
+  public Future<Boolean> saveToCacheAsync(String group, String memberIndexArrStr) {
+    saveToCache(group, memberIndexArrStr);
+    return AsyncResult.forValue(true);
+  }
+
+  /**
+   * 会员是否出现在组中
+   *
+   * @param group          组
+   * @param memberIndexStr 会员下标
+   * @return 结果分类
+   * - true:出现在组中;
+   * - false:未出现在组中;
+   * - null:缓存中无该数据,无法判断
+   */
+  @Override
   public Boolean inGroup(String group, String memberIndexStr) {
 
     // 计算segmentId并生成group的segmentKey
     long memberIndex = Long.parseLong(memberIndexStr);
     long segmentId = memberIndex % segmentNum;
-    String segmentKey = SegmentBuilder.buildSegKey(group, segmentId);
+    String segmentKey = SegmentBuilder.buildSegmentKey(group, segmentId);
 
     String segmentBatchKey = stringRedisTemplate.opsForValue().get(segmentKey);
     if (segmentBatchKey == null) {
@@ -108,21 +130,26 @@ public class RoaringBitmapToRedis {
   }
 
   /**
-   * 查询指定的会员,是否在多个group中
+   * 判断会员是否出现在多个组中
    *
-   * @param groups         group列表
-   * @param memberIndexStr 会员下标字符串
-   * @return group --> true:存在;false:不存在;null:未知
+   * @param groups         组列表
+   * @param memberIndexStr 会员索引的字符串
+   * @return 结果描述
+   * key: 组
+   * value:
+   * - true:出现在组中
+   * - false:未出现在组中
+   * - null:数据不在缓存中,无法判断
    */
-  public Map<String, Boolean> inGroups(Set<String> groups, String memberIndexStr) {
-
+  @Override
+  public Map<String, Boolean> inGroup(Set<String> groups, String memberIndexStr) {
     // 提前构建结果集,默认是未知
     Map<String, Boolean> result = initDefaultResult(groups);
 
     // 批量构建会员所在的段的key
     long memberIndex = Long.parseLong(memberIndexStr);
     Long segmentId = memberIndex % segmentNum;
-    Set<String> segmentKeys = SegmentBuilder.buildSegKeys(groups, segmentId);
+    Set<String> segmentKeys = SegmentBuilder.buildSegmentKeys(groups, segmentId);
 
     // 一次获取多个段的有效批次的key
     List<String> batchKeys = stringRedisTemplate.opsForValue().multiGet(segmentKeys);
@@ -143,7 +170,7 @@ public class RoaringBitmapToRedis {
     // 检查会员是否出现在对应的group中,如果命中了Redis的缓存,结果要么是true,要么是false
     // 默认为null的说明group的分段未加载到Redis中缓存,需要到ClickHouse中查询
     for (String group : result.keySet()) {
-      String segmentKey = SegmentBuilder.buildSegKey(group, segmentId);
+      String segmentKey = SegmentBuilder.buildSegmentKey(group, segmentId);
       Roaring64Bitmap bitmap = segmentMap.get(segmentKey);
       if (bitmap != null) {
         result.put(group, bitmap.contains(memberIndex));

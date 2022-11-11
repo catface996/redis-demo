@@ -6,11 +6,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Random;
 import java.util.Set;
+import java.util.concurrent.Future;
 import lombok.extern.slf4j.Slf4j;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.util.Assert;
 
@@ -20,16 +20,13 @@ import org.springframework.util.Assert;
  */
 @Slf4j
 @SpringBootTest
-public class RoaringBitmapToRedisTest {
+public class GroupMemberRoaring64BitmapImplTest {
 
   @Autowired
-  private RoaringBitmapToRedis roaringBitmapToRedis;
+  private GroupMemberCacheService groupMemberCacheService;
 
   @Autowired
   private StringRedisTemplate stringRedisTemplate;
-
-  @Autowired
-  private RedisTemplate<String, byte[]> byteRedisTemplate;
 
   @Test
   public void testClean() {
@@ -64,12 +61,31 @@ public class RoaringBitmapToRedisTest {
     long total = 0L;
     for (int i = 0; i < 100; i++) {
       long start = System.currentTimeMillis();
-      roaringBitmapToRedis.saveToRedis("group-" + i, memberIndexArrStr);
+      groupMemberCacheService.saveToCache("group-" + i, memberIndexArrStr);
       long duration = System.currentTimeMillis() - start;
       total += duration;
       log.info("process duration {}", duration);
     }
     log.info("ave duration {}", total / 100);
+  }
+
+  @Test
+  public void testSaveToRedisAsync() throws Exception {
+    int groupNums = 10;
+    String memberIndexArrStr = buildMemberIndexStr(1500 * 10000);
+    List<Future<Boolean>> futures = new ArrayList<>();
+    long start = System.currentTimeMillis();
+    for (int i = 0; i < groupNums; i++) {
+      Future<Boolean> future = groupMemberCacheService.saveToCacheAsync("group-" + i,
+          memberIndexArrStr);
+      futures.add(future);
+    }
+    for (Future<Boolean> future : futures) {
+      future.get();
+    }
+    long duration = System.currentTimeMillis() - start;
+    log.info("total duration {}", duration);
+    log.info("avg duration {}", duration / groupNums);
   }
 
   @Test
@@ -82,7 +98,7 @@ public class RoaringBitmapToRedisTest {
       String memberId = (memberIndex + baseNum) + "";
       String group = "group-" + random.nextInt(100);
       long start = System.currentTimeMillis();
-      Boolean in = roaringBitmapToRedis.inGroup(group, memberId);
+      Boolean in = groupMemberCacheService.inGroup(group, memberId);
       long end = System.currentTimeMillis();
       long duration = end - start;
       total += duration;
@@ -106,7 +122,7 @@ public class RoaringBitmapToRedisTest {
         groups.add("group-" + random.nextInt(100));
       }
       long start = System.currentTimeMillis();
-      Map<String, Boolean> in = roaringBitmapToRedis.inGroups(groups, memberId);
+      Map<String, Boolean> in = groupMemberCacheService.inGroup(groups, memberId);
       long end = System.currentTimeMillis();
       long duration = end - start;
       total += duration;

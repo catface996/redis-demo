@@ -1,6 +1,6 @@
 package com.catface.redis.controller;
 
-import com.catface.redis.service.RoaringBitmapToRedis;
+import com.catface.redis.service.impl.GroupMemberRoaring64BitmapImpl;
 import com.catface.redis.service.convert.Roaring64BitmapConvert;
 import com.catface.redis.util.ObjectSize;
 import com.catface.redis.util.ObjectUtil;
@@ -24,7 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class SyncToRedisController {
 
   @Autowired
-  private RoaringBitmapToRedis roaringBitmapToRedis;
+  private GroupMemberRoaring64BitmapImpl groupMemberRoaring64BitmapImpl;
 
   private Random RANDOM = new Random();
 
@@ -43,7 +43,7 @@ public class SyncToRedisController {
       long total = 0L;
       for (int i = 0; i < groupNum; i++) {
         long start = System.currentTimeMillis();
-        roaringBitmapToRedis.saveToRedis("group-" + i, memberIndexArrStr);
+        groupMemberRoaring64BitmapImpl.saveToCache("group-" + i, memberIndexArrStr);
         long duration = System.currentTimeMillis() - start;
         total += duration;
         log.info("process duration {}", duration);
@@ -57,7 +57,7 @@ public class SyncToRedisController {
   public Boolean inGroup() {
     int groupId = RANDOM.nextInt(100);
     int memberIndex = RANDOM.nextInt(1500 * 10000);
-    assert  roaringBitmapToRedis.inGroup("group-" + groupId, (10000 * 10000 + memberIndex) + "");
+    assert  groupMemberRoaring64BitmapImpl.inGroup("group-" + groupId, (10000 * 10000 + memberIndex) + "");
     return true;
   }
 
